@@ -54,6 +54,17 @@
             font-weight: bold;
             margin: 20px 0;
             color: #4CAF50;
+            transition: all 0.3s ease;
+        }
+
+        .flow-display.flowing {
+            color: #ff9800;
+            animation: glow 1s infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
 
         .angle-display {
@@ -88,6 +99,31 @@
             opacity: 0.8;
         }
 
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .feature-display {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 11px;
+            font-family: monospace;
+            text-align: left;
+        }
+
         .control-btn {
             background: rgba(255,255,255,0.2);
             border: none;
@@ -105,267 +141,151 @@
             background: rgba(255,255,255,0.3);
             transform: translateY(-2px);
         }
-
-        .control-btn.recording {
-            background: #f44336;
-            animation: pulse 1.5s infinite;
-        }
-
-        .control-btn.processing {
-            background: #ff9800;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        .status-text {
-            text-align: center;
-            margin: 10px 0;
-            font-size: 14px;
-            opacity: 0.8;
-        }
-
-        .feature-display {
-            background: rgba(0,0,0,0.2);
-            border-radius: 10px;
-            padding: 10px;
-            margin-top: 10px;
-            font-size: 12px;
-            font-family: monospace;
-        }
-
-        .error-message {
-            background: rgba(244, 67, 54, 0.3);
-            padding: 10px;
-            border-radius: 10px;
-            margin: 10px 0;
-            text-align: center;
-        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>💧 나이아드 물 절약 시스템</h1>
-        <p>음향 기반 실시간 유량 측정</p>
+        <p>실시간 음향 기반 유량 측정</p>
     </div>
 
     <div class="main-container">
         <!-- 측정 결과 카드 -->
         <div class="measurement-card">
-            <h3>현재 유량</h3>
+            <h3><span class="status-indicator"></span>실시간 모니터링</h3>
             <div class="flow-display" id="flowDisplay">0.0 ml/s</div>
             <div class="angle-display" id="angleDisplay">각도: 0°</div>
-            <div class="status-text" id="statusText">측정 대기 중</div>
             
             <div class="feature-display" id="featureDisplay">
-                Centroid: - Hz<br>
-                Peak Freq: - Hz<br>
-                Energy: -
+                Centroid: 0 Hz | Peak: 0 Hz<br>
+                Energy: 0.00e+00 | Distance: 0.0000
             </div>
         </div>
 
         <!-- 통계 -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value" id="sessionVolume">0</div>
-                <div class="stat-label">이번 세션 (ml)</div>
+                <div class="stat-value" id="currentFlow">0.0</div>
+                <div class="stat-label">현재 유량 (ml/s)</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value" id="totalVolume">0</div>
-                <div class="stat-label">오늘 총 사용량 (ml)</div>
+                <div class="stat-label">오늘 사용량 (ml)</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value" id="savedAmount">0</div>
                 <div class="stat-label">절약량 (ml)</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="measureCount">0</div>
-                <div class="stat-label">측정 횟수</div>
+                <div class="stat-value" id="sessionTime">0</div>
+                <div class="stat-label">사용 시간 (초)</div>
             </div>
         </div>
 
-        <!-- 컨트롤 -->
-        <button class="control-btn" id="recordBtn" onclick="toggleRecording()">
-            🎤 녹음 시작
+        <button class="control-btn" onclick="resetDaily()">
+            🔄 일일 초기화
         </button>
-        
-        <button class="control-btn" onclick="resetSession()">
-            🔄 세션 초기화
-        </button>
-
-        <div id="errorMessage" class="error-message" style="display:none;"></div>
     </div>
 
     <script>
-        // 학습된 각도-유량 매핑 (전달받은 데이터)
+        // 학습된 각도-유량 매핑
         const angleFlowMap = {
-            8: {
-                flow: 24.75,
-                centroid: 2373.0,
-                peakFreq: 120.0,
-                energy: 2.90e+08
-            },
-            16: {
-                flow: 30.94,
-                centroid: 2075.7,
-                peakFreq: 120.0,
-                energy: 6.50e+09
-            },
-            24: {
-                flow: 40.84,
-                centroid: 2779.4,
-                peakFreq: 119.9,
-                energy: 1.99e+09
-            },
-            32: {
-                flow: 61.88,
-                centroid: 5005.7,
-                peakFreq: 383.5,
-                energy: 8.70e+08
-            },
-            40: {
-                flow: 123.76,
-                centroid: 4177.7,
-                peakFreq: 120.0,
-                energy: 1.92e+09
-            }
+            8: { flow: 24.75, centroid: 2373.0, peakFreq: 120.0, energy: 2.90e+08 },
+            16: { flow: 30.94, centroid: 2075.7, peakFreq: 120.0, energy: 6.50e+09 },
+            24: { flow: 40.84, centroid: 2779.4, peakFreq: 119.9, energy: 1.99e+09 },
+            32: { flow: 61.88, centroid: 5005.7, peakFreq: 383.5, energy: 8.70e+08 },
+            40: { flow: 123.76, centroid: 4177.7, peakFreq: 120.0, energy: 1.92e+09 }
         };
 
         // 전역 변수
-        let mediaRecorder;
-        let audioChunks = [];
-        let isRecording = false;
         let audioContext;
-        let sessionVolume = 0;
+        let analyser;
+        let microphone;
+        let scriptProcessor;
         let totalVolume = 0;
         let savedAmount = 0;
-        let measureCount = 0;
-        let sessionStartTime = null;
+        let sessionTime = 0;
+        let lastUpdateTime = Date.now();
+        let currentFlow = 0;
+        let isFlowing = false;
 
-        // Web Audio API 초기화
-        function initAudioContext() {
-            if (!audioContext) {
+        // 페이지 로드 시 자동 시작
+        window.addEventListener('load', async () => {
+            loadStoredData();
+            await startRealTimeAnalysis();
+        });
+
+        // 실시간 분석 시작
+        async function startRealTimeAnalysis() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    } 
+                });
+                
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-        }
-
-        // 녹음 토글
-        async function toggleRecording() {
-            if (!isRecording) {
-                await startRecording();
-            } else {
-                stopRecording();
-            }
-        }
-
-        // 녹음 시작
-        async function startRecording() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
                 
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
+                analyser.fftSize = 8192;
+                analyser.smoothingTimeConstant = 0.3;
                 
-                mediaRecorder.ondataavailable = (event) => {
-                    audioChunks.push(event.data);
-                };
+                microphone.connect(analyser);
+                analyser.connect(scriptProcessor);
+                scriptProcessor.connect(audioContext.destination);
                 
-                mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    await processAudio(audioBlob);
-                    stream.getTracks().forEach(track => track.stop());
-                };
+                scriptProcessor.onaudioprocess = processAudioFrame;
                 
-                mediaRecorder.start();
-                isRecording = true;
-                sessionStartTime = Date.now();
-                
-                document.getElementById('recordBtn').textContent = '⏹️ 녹음 중지';
-                document.getElementById('recordBtn').classList.add('recording');
-                document.getElementById('statusText').textContent = '녹음 중... (3초 이상 권장)';
+                console.log('실시간 분석 시작');
                 
             } catch (error) {
-                showError('마이크 접근 실패: ' + error.message);
+                alert('마이크 접근 실패: ' + error.message);
             }
         }
 
-        // 녹음 중지
-        function stopRecording() {
-            if (mediaRecorder && isRecording) {
-                mediaRecorder.stop();
-                isRecording = false;
-                
-                document.getElementById('recordBtn').textContent = '🎤 녹음 시작';
-                document.getElementById('recordBtn').classList.remove('recording');
-                document.getElementById('recordBtn').classList.add('processing');
-                document.getElementById('statusText').textContent = '분석 중...';
-            }
+        // 오디오 프레임 처리
+        function processAudioFrame() {
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+            
+            // FFT 특징 추출
+            const features = extractFeatures(dataArray, audioContext.sampleRate);
+            
+            // 유량 추정
+            const result = estimateFlow(features);
+            
+            // UI 업데이트
+            updateDisplay(result, features);
+            
+            // 통계 업데이트
+            updateStatistics(result.flow);
         }
 
-        // 오디오 처리 및 FFT 분석
-        async function processAudio(audioBlob) {
-            try {
-                initAudioContext();
-                
-                const arrayBuffer = await audioBlob.arrayBuffer();
-                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                
-                // 오디오 데이터 추출
-                const channelData = audioBuffer.getChannelData(0);
-                
-                // FFT 분석
-                const features = analyzeAudio(channelData, audioBuffer.sampleRate);
-                
-                // 유량 추정
-                const result = estimateFlow(features);
-                
-                // 결과 표시
-                displayResults(result, features);
-                
-                // 통계 업데이트
-                updateStatistics(result);
-                
-                document.getElementById('recordBtn').classList.remove('processing');
-                
-            } catch (error) {
-                showError('분석 실패: ' + error.message);
-                document.getElementById('recordBtn').classList.remove('processing');
-            }
-        }
-
-        // FFT 분석
-        function analyzeAudio(samples, sampleRate) {
-            // 간단한 FFT (실제로는 더 복잡한 알고리즘 사용)
-            const N = samples.length;
-            const fftSize = Math.min(8192, Math.pow(2, Math.floor(Math.log2(N))));
+        // 특징 추출
+        function extractFeatures(fftData, sampleRate) {
+            const freqStep = sampleRate / (fftData.length * 2);
             
-            // 파워 스펙트럼 계산
-            const magnitudes = new Array(fftSize / 2);
-            for (let i = 0; i < fftSize / 2; i++) {
-                magnitudes[i] = 0;
-            }
-            
-            // 윈도우 함수 적용 및 FFT (단순화)
-            for (let i = 0; i < Math.min(N, fftSize); i++) {
-                const bin = Math.floor((i / fftSize) * (fftSize / 2));
-                magnitudes[bin] += Math.abs(samples[i]);
-            }
-            
-            // 주파수 특징 추출
-            const freqStep = sampleRate / fftSize;
             let totalEnergy = 0;
             let weightedSum = 0;
             let maxMag = 0;
             let peakFreq = 0;
             let midEnergy = 0;
+            let totalMag = 0;
             
-            for (let i = 0; i < magnitudes.length; i++) {
+            for (let i = 0; i < fftData.length; i++) {
                 const freq = i * freqStep;
-                const mag = magnitudes[i];
+                const mag = fftData[i];
+                
+                // 100Hz 이하 무시 (노이즈)
+                if (freq < 100) continue;
                 
                 totalEnergy += mag * mag;
+                totalMag += mag;
                 weightedSum += freq * mag;
                 
                 if (mag > maxMag) {
@@ -379,7 +299,7 @@
                 }
             }
             
-            const spectralCentroid = weightedSum / (magnitudes.reduce((a, b) => a + b, 0) + 1e-10);
+            const spectralCentroid = totalMag > 0 ? weightedSum / totalMag : 0;
             
             return {
                 spectralCentroid: spectralCentroid,
@@ -389,16 +309,21 @@
             };
         }
 
-        // 유량 추정 (최근접 이웃)
+        // 유량 추정
         function estimateFlow(features) {
             let minDistance = Infinity;
-            let bestMatch = null;
+            let bestMatch = { angle: 0, flow: 0, distance: 0 };
+            
+            // 에너지가 너무 낮으면 물이 안 나오는 것으로 판단
+            if (features.totalEnergy < 1000) {
+                return bestMatch;
+            }
             
             for (const [angle, ref] of Object.entries(angleFlowMap)) {
                 const distance = Math.sqrt(
                     Math.pow((features.spectralCentroid - ref.centroid) / 1000, 2) +
                     Math.pow((features.peakFreq - ref.peakFreq) / 100, 2) +
-                    Math.pow((features.totalEnergy - ref.energy) / 1e8, 2)
+                    Math.pow((features.totalEnergy - ref.energy) / 1e7, 2)
                 );
                 
                 if (distance < minDistance) {
@@ -411,89 +336,107 @@
                 }
             }
             
+            // 거리가 너무 멀면 0으로 처리
+            if (minDistance > 50) {
+                bestMatch.flow = 0;
+            }
+            
             return bestMatch;
         }
 
-        // 결과 표시
-        function displayResults(result, features) {
-            document.getElementById('flowDisplay').textContent = result.flow.toFixed(2) + ' ml/s';
-            document.getElementById('angleDisplay').textContent = `각도: ${result.angle}°`;
-            document.getElementById('statusText').textContent = `매칭 거리: ${result.distance.toFixed(4)}`;
+        // 화면 업데이트
+        function updateDisplay(result, features) {
+            const flowEl = document.getElementById('flowDisplay');
+            flowEl.textContent = result.flow.toFixed(2) + ' ml/s';
             
-            document.getElementById('featureDisplay').innerHTML = `
-                Centroid: ${features.spectralCentroid.toFixed(1)} Hz<br>
-                Peak Freq: ${features.peakFreq.toFixed(1)} Hz<br>
-                Energy: ${features.totalEnergy.toExponential(2)}
-            `;
+            if (result.flow > 5) {
+                flowEl.classList.add('flowing');
+            } else {
+                flowEl.classList.remove('flowing');
+            }
+            
+            document.getElementById('angleDisplay').textContent = `각도: ${result.angle}°`;
+            document.getElementById('currentFlow').textContent = result.flow.toFixed(1);
+            
+            document.getElementById('featureDisplay').innerHTML = 
+                `Centroid: ${features.spectralCentroid.toFixed(0)} Hz | ` +
+                `Peak: ${features.peakFreq.toFixed(0)} Hz<br>` +
+                `Energy: ${features.totalEnergy.toExponential(2)} | ` +
+                `Distance: ${result.distance.toFixed(4)}`;
         }
 
         // 통계 업데이트
-        function updateStatistics(result) {
-            if (sessionStartTime) {
-                const duration = (Date.now() - sessionStartTime) / 1000; // 초
-                const volume = result.flow * duration;
-                
-                sessionVolume += volume;
+        function updateStatistics(flow) {
+            const now = Date.now();
+            const deltaTime = (now - lastUpdateTime) / 1000; // 초
+            lastUpdateTime = now;
+            
+            currentFlow = flow;
+            
+            if (flow > 1) {
+                isFlowing = true;
+                const volume = flow * deltaTime;
                 totalVolume += volume;
-                measureCount++;
+                sessionTime += deltaTime;
                 
-                // 절약량 계산 (평균 유량 60 ml/s 기준)
-                const avgFlow = 60;
-                if (result.flow < avgFlow) {
-                    savedAmount += (avgFlow - result.flow) * duration;
+                // 절약량 계산 (평균 60 ml/s 기준)
+                if (flow < 60) {
+                    savedAmount += (60 - flow) * deltaTime;
                 }
-                
-                document.getElementById('sessionVolume').textContent = Math.round(sessionVolume);
-                document.getElementById('totalVolume').textContent = Math.round(totalVolume);
-                document.getElementById('savedAmount').textContent = Math.round(savedAmount);
-                document.getElementById('measureCount').textContent = measureCount;
+            } else {
+                isFlowing = false;
             }
             
-            sessionStartTime = null;
+            document.getElementById('totalVolume').textContent = Math.round(totalVolume);
+            document.getElementById('savedAmount').textContent = Math.round(savedAmount);
+            document.getElementById('sessionTime').textContent = Math.round(sessionTime);
         }
 
-        // 세션 초기화
-        function resetSession() {
-            sessionVolume = 0;
-            document.getElementById('sessionVolume').textContent = '0';
-            document.getElementById('flowDisplay').textContent = '0.0 ml/s';
-            document.getElementById('angleDisplay').textContent = '각도: 0°';
-            document.getElementById('statusText').textContent = '측정 대기 중';
-        }
-
-        // 에러 표시
-        function showError(message) {
-            const errorDiv = document.getElementById('errorMessage');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-            setTimeout(() => {
-                errorDiv.style.display = 'none';
-            }, 5000);
-        }
-
-        // 로컬 스토리지에서 데이터 로드
-        window.addEventListener('load', () => {
+        // 데이터 로드
+        function loadStoredData() {
             const stored = localStorage.getItem('naiad_data');
             if (stored) {
                 const data = JSON.parse(stored);
-                totalVolume = data.totalVolume || 0;
-                savedAmount = data.savedAmount || 0;
-                measureCount = data.measureCount || 0;
+                const today = new Date().toDateString();
                 
-                document.getElementById('totalVolume').textContent = Math.round(totalVolume);
-                document.getElementById('savedAmount').textContent = Math.round(savedAmount);
-                document.getElementById('measureCount').textContent = measureCount;
+                if (data.date === today) {
+                    totalVolume = data.totalVolume || 0;
+                    savedAmount = data.savedAmount || 0;
+                    sessionTime = data.sessionTime || 0;
+                }
             }
-        });
+        }
 
         // 데이터 저장
-        window.addEventListener('beforeunload', () => {
+        function saveData() {
+            const today = new Date().toDateString();
             localStorage.setItem('naiad_data', JSON.stringify({
+                date: today,
                 totalVolume: totalVolume,
                 savedAmount: savedAmount,
-                measureCount: measureCount
+                sessionTime: sessionTime
             }));
-        });
+        }
+
+        // 자동 저장 (5초마다)
+        setInterval(saveData, 5000);
+
+        // 일일 초기화
+        function resetDaily() {
+            if (confirm('오늘의 데이터를 초기화하시겠습니까?')) {
+                totalVolume = 0;
+                savedAmount = 0;
+                sessionTime = 0;
+                saveData();
+                
+                document.getElementById('totalVolume').textContent = '0';
+                document.getElementById('savedAmount').textContent = '0';
+                document.getElementById('sessionTime').textContent = '0';
+            }
+        }
+
+        // 페이지 언로드 시 저장
+        window.addEventListener('beforeunload', saveData);
     </script>
 </body>
 </html>
