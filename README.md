@@ -218,6 +218,8 @@
         let savedAmount = 0;
         let measureCount = 0;
         let lastUpdateTime = Date.now();
+        let isFlowing = false; // 물이 흐르는지 여부
+        let flowStartTime = null;
 
         // 연속 측정 시작
         async function toggleRecording() {
